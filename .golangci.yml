@@ -1,0 +1,34 @@
+linters:
+  enable:
+    - gofmt
+    - govet
+    - gosimple
+    - goconst
+    - goimports
+    - misspell
+    - revive
+    - ineffassign
+    - gosec
+    - staticcheck
+    - prealloc
+    - bodyclose
+    - errcheck
+    # shadow was removed, using govet's shadow checking instead
+  
+linters-settings:
+  govet:
+    check-shadowing: true
+  gosec:
+    excludes:
+      - G304  # Ignore file inclusion via variable (needed for FUSE)
+
+issues:
+  exclude-dirs:
+    - vendor
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+
+run:
+  timeout: 5m
