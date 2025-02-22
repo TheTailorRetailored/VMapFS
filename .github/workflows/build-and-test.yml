@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write  # Required to create releases
+  contents: write
 
 jobs:
   lint-and-test:
@@ -46,6 +46,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
@@ -58,7 +60,7 @@ jobs:
       - name: Build Release Binary
         env:
           GOOS: linux
-          GOARCH: amd64  # Explicitly set to amd64 only
+          GOARCH: amd64
           CGO_ENABLED: 1
         run: |
           make build
@@ -66,7 +68,12 @@ jobs:
       - name: Generate Release Notes
         run: |
           echo "## Changes since last release" > release_notes.md
-          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"* %s" >> release_notes.md
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            git log ${PREV_TAG}..HEAD --pretty=format:"* %s" >> release_notes.md
+          else
+            git log --pretty=format:"* %s" >> release_notes.md
+          fi
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
