@@ -274,3 +274,92 @@ func (f *UnsortedFile) Open(_ context.Context, req *fuse.OpenRequest, resp *fuse
 	resp.Flags |= fuse.OpenDirectIO
 	return &FileHandle{file: file}, nil
 }
+
+// Getxattr retrieves an extended attribute.
+func (f *UnsortedFile) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+	unsortedLogger.Debug("Getting xattr %q for unsorted file %q", req.Name, f.path.String())
+	f.fs.mu.RLock()
+	defer f.fs.mu.RUnlock()
+
+	attrs, exists := f.fs.pathMapper.GetXattrs(f.path)
+	if !exists || attrs == nil {
+		unsortedLogger.Trace("No xattrs found for source %q", f.path.String())
+		return fuse.ErrNoXattr
+	}
+
+	value, exists := attrs[req.Name]
+	if !exists {
+		unsortedLogger.Trace("Xattr %q not found for source %q", req.Name, f.path.String())
+		return fuse.ErrNoXattr
+	}
+
+	resp.Xattr = value
+	unsortedLogger.Trace("Retrieved xattr %q: %d bytes", req.Name, len(value))
+	return nil
+}
+
+// Setxattr sets an extended attribute.
+func (f *UnsortedFile) Setxattr(ctx context.Context, req *fuse.SetxattrRequest) error {
+	unsortedLogger.Debug("Setting xattr %q for unsorted file %q (size: %d bytes)", req.Name, f.path.String(), len(req.Xattr))
+	f.fs.mu.Lock()
+	defer f.fs.mu.Unlock()
+
+	value := make([]byte, len(req.Xattr))
+	copy(value, req.Xattr)
+	f.fs.pathMapper.SetXattr(f.path, req.Name, value)
+
+	if err := f.fs.stateManager.SaveState(f.fs.state); err != nil {
+		unsortedLogger.Error("Failed to save state after setting xattr: %v", err)
+		return err
+	}
+
+	unsortedLogger.Trace("Xattr %q set successfully", req.Name)
+	return nil
+}
+
+// Listxattr lists all extended attributes.
+func (f *UnsortedFile) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+	unsortedLogger.Debug("Listing xattrs for unsorted file %q", f.path.String())
+	f.fs.mu.RLock()
+	defer f.fs.mu.RUnlock()
+
+	attrs, exists := f.fs.pathMapper.ListXattrs(f.path)
+	if !exists || len(attrs) == 0 {
+		unsortedLogger.Trace("No xattrs to list for source %q", f.path.String())
+		return nil
+	}
+
+	for _, name := range attrs {
+		resp.Append(name)
+	}
+
+	unsortedLogger.Trace("Listed %d xattrs", len(attrs))
+	return nil
+}
+
+// Removexattr removes an extended attribute.
+func (f *UnsortedFile) Removexattr(ctx context.Context, req *fuse.RemovexattrRequest) error {
+	unsortedLogger.Debug("Removing xattr %q for unsorted file %q", req.Name, f.path.String())
+	f.fs.mu.Lock()
+	defer f.fs.mu.Unlock()
+
+	attrs, exists := f.fs.pathMapper.GetXattrs(f.path)
+	if !exists || attrs == nil {
+		unsortedLogger.Trace("No xattrs found to remove for source %q", f.path.String())
+		return fuse.ErrNoXattr
+	}
+
+	if _, exists := attrs[req.Name]; !exists {
+		unsortedLogger.Trace("Xattr %q not found for source %q", req.Name, f.path.String())
+		return fuse.ErrNoXattr
+	}
+
+	f.fs.pathMapper.RemoveXattr(f.path, req.Name)
+	if err := f.fs.stateManager.SaveState(f.fs.state); err != nil {
+		unsortedLogger.Error("Failed to save state after removing xattr: %v", err)
+		return err
+	}
+
+	unsortedLogger.Trace("Xattr %q removed successfully", req.Name)
+	return nil
+}
