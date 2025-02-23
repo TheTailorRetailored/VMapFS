@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -174,6 +175,68 @@ func TestUnsortedDirectory(t *testing.T) {
 		err = root.(*Dir).Rename(ctx, renameReq, unsortedNode)
 		if err != syscall.EPERM {
 			t.Errorf("Expected EPERM when moving directory to _UNSORTED, got: %v", err)
+		}
+	})
+
+	// Test UnsortedFile Xattr Operations
+	t.Run("UnsortedFileXattrOperations", func(t *testing.T) {
+		root, _ := vfs.Root()
+		unsortedNode, err := root.(*Dir).Lookup(ctx, "_UNSORTED")
+		if err != nil {
+			t.Fatalf("Failed to lookup _UNSORTED: %v", err)
+		}
+
+		unsortedFileNode, err := unsortedNode.(*UnsortedDir).Lookup(ctx, "unsorted2.txt")
+		if err != nil {
+			t.Fatalf("Failed to lookup unsorted file: %v", err)
+		}
+
+		unsortedFile := unsortedFileNode.(*UnsortedFile)
+
+		// Test Setxattr
+		setReq := &fuse.SetxattrRequest{
+			Name:  "test.unsorted.key",
+			Xattr: []byte("unsorted test value"),
+		}
+		if err := unsortedFile.Setxattr(ctx, setReq); err != nil {
+			t.Errorf("Failed to set xattr on unsorted file: %v", err)
+		}
+
+		// Test Getxattr
+		getReq := &fuse.GetxattrRequest{Name: "test.unsorted.key"}
+		getResp := &fuse.GetxattrResponse{}
+		if err := unsortedFile.Getxattr(ctx, getReq, getResp); err != nil {
+			t.Errorf("Failed to get xattr on unsorted file: %v", err)
+		}
+		if string(getResp.Xattr) != "unsorted test value" {
+			t.Errorf("Expected xattr value 'unsorted test value', got %q", string(getResp.Xattr))
+		}
+
+		// Test Listxattr
+		listReq := &fuse.ListxattrRequest{}
+		listResp := &fuse.ListxattrResponse{}
+		if err := unsortedFile.Listxattr(ctx, listReq, listResp); err != nil {
+			t.Errorf("Failed to list xattrs on unsorted file: %v", err)
+		}
+		names := strings.Split(string(listResp.Xattr), "\x00")
+		found := false
+		for _, name := range names {
+			if name == "test.unsorted.key" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected 'test.unsorted.key' in xattr list, got %v", names)
+		}
+
+		// Test Removexattr
+		removeReq := &fuse.RemovexattrRequest{Name: "test.unsorted.key"}
+		if err := unsortedFile.Removexattr(ctx, removeReq); err != nil {
+			t.Errorf("Failed to remove xattr on unsorted file: %v", err)
+		}
+		if err := unsortedFile.Getxattr(ctx, getReq, getResp); err != fuse.ErrNoXattr {
+			t.Errorf("Expected ErrNoXattr after removal, got %v", err)
 		}
 	})
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"bazil.org/fuse"
@@ -144,6 +145,68 @@ func TestFileOperations(t *testing.T) {
 		}
 		if newFile == nil {
 			t.Error("Renamed file not found at new location")
+		}
+	})
+
+	// Test File Xattr Operations
+	t.Run("FileXattrOperations", func(t *testing.T) {
+		root, _ := vfs.Root()
+		mappedDir, err := root.(*Dir).Lookup(ctx, "mapped")
+		if err != nil {
+			t.Fatalf("Failed to lookup mapped directory: %v", err)
+		}
+
+		fileNode, err := mappedDir.(*Dir).Lookup(ctx, "testfile.txt")
+		if err != nil {
+			t.Fatalf("Failed to lookup file: %v", err)
+		}
+
+		file := fileNode.(*File)
+
+		// Test Setxattr
+		setReq := &fuse.SetxattrRequest{
+			Name:  "test.key",
+			Xattr: []byte("test value"),
+		}
+		if err := file.Setxattr(ctx, setReq); err != nil {
+			t.Errorf("Failed to set xattr: %v", err)
+		}
+
+		// Test Getxattr
+		getReq := &fuse.GetxattrRequest{Name: "test.key"}
+		getResp := &fuse.GetxattrResponse{}
+		if err := file.Getxattr(ctx, getReq, getResp); err != nil {
+			t.Errorf("Failed to get xattr: %v", err)
+		}
+		if string(getResp.Xattr) != "test value" {
+			t.Errorf("Expected xattr value 'test value', got %q", string(getResp.Xattr))
+		}
+
+		// Test Listxattr
+		listReq := &fuse.ListxattrRequest{}
+		listResp := &fuse.ListxattrResponse{}
+		if err := file.Listxattr(ctx, listReq, listResp); err != nil {
+			t.Errorf("Failed to list xattrs: %v", err)
+		}
+		names := strings.Split(string(listResp.Xattr), "\x00")
+		found := false
+		for _, name := range names {
+			if name == "test.key" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected 'test.key' in xattr list, got %v", names)
+		}
+
+		// Test Removexattr
+		removeReq := &fuse.RemovexattrRequest{Name: "test.key"}
+		if err := file.Removexattr(ctx, removeReq); err != nil {
+			t.Errorf("Failed to remove xattr: %v", err)
+		}
+		if err := file.Getxattr(ctx, getReq, getResp); err != fuse.ErrNoXattr {
+			t.Errorf("Expected ErrNoXattr after removal, got %v", err)
 		}
 	})
 }
