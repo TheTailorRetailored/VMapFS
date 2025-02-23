@@ -105,50 +105,7 @@ func TestFileOperations(t *testing.T) {
 		}
 	})
 
-	// Test file rename
-	t.Run("FileRename", func(t *testing.T) {
-		root, _ := vfs.Root()
-		mappedDir, err := root.(*Dir).Lookup(ctx, "mapped")
-		if err != nil {
-			t.Fatalf("Failed to lookup mapped directory: %v", err)
-		}
-
-		dir := mappedDir.(*Dir)
-
-		// Create target directory
-		targetReq := &fuse.MkdirRequest{Name: "target"}
-		targetDir, err := root.(*Dir).Mkdir(ctx, targetReq)
-		if err != nil {
-			t.Fatalf("Failed to create target directory: %v", err)
-		}
-
-		// Rename the file
-		renameReq := &fuse.RenameRequest{
-			OldName: "testfile.txt",
-			NewName: "renamed.txt",
-		}
-		err = dir.Rename(ctx, renameReq, targetDir)
-		if err != nil {
-			t.Errorf("Failed to rename file: %v", err)
-		}
-
-		// Verify old location doesn't have the file
-		_, err = dir.Lookup(ctx, "testfile.txt")
-		if err == nil {
-			t.Error("Old file location should not exist after rename")
-		}
-
-		// Verify new location has the file
-		newFile, err := targetDir.(*Dir).Lookup(ctx, "renamed.txt")
-		if err != nil {
-			t.Error("New file location should exist after rename")
-		}
-		if newFile == nil {
-			t.Error("Renamed file not found at new location")
-		}
-	})
-
-	// Test File Xattr Operations
+	// Test File Xattr Operations (moved before FileRename)
 	t.Run("FileXattrOperations", func(t *testing.T) {
 		root, _ := vfs.Root()
 		mappedDir, err := root.(*Dir).Lookup(ctx, "mapped")
@@ -207,6 +164,49 @@ func TestFileOperations(t *testing.T) {
 		}
 		if err := file.Getxattr(ctx, getReq, getResp); err != fuse.ErrNoXattr {
 			t.Errorf("Expected ErrNoXattr after removal, got %v", err)
+		}
+	})
+
+	// Test file rename (moved after FileXattrOperations)
+	t.Run("FileRename", func(t *testing.T) {
+		root, _ := vfs.Root()
+		mappedDir, err := root.(*Dir).Lookup(ctx, "mapped")
+		if err != nil {
+			t.Fatalf("Failed to lookup mapped directory: %v", err)
+		}
+
+		dir := mappedDir.(*Dir)
+
+		// Create target directory
+		targetReq := &fuse.MkdirRequest{Name: "target"}
+		targetDir, err := root.(*Dir).Mkdir(ctx, targetReq)
+		if err != nil {
+			t.Fatalf("Failed to create target directory: %v", err)
+		}
+
+		// Rename the file
+		renameReq := &fuse.RenameRequest{
+			OldName: "testfile.txt",
+			NewName: "renamed.txt",
+		}
+		err = dir.Rename(ctx, renameReq, targetDir)
+		if err != nil {
+			t.Errorf("Failed to rename file: %v", err)
+		}
+
+		// Verify old location doesn't have the file
+		_, err = dir.Lookup(ctx, "testfile.txt")
+		if err == nil {
+			t.Error("Old file location should not exist after rename")
+		}
+
+		// Verify new location has the file
+		newFile, err := targetDir.(*Dir).Lookup(ctx, "renamed.txt")
+		if err != nil {
+			t.Error("New file location should exist after rename")
+		}
+		if newFile == nil {
+			t.Error("Renamed file not found at new location")
 		}
 	})
 }
