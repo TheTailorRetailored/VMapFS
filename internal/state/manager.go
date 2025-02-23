@@ -86,7 +86,7 @@ func (sm *Manager) LoadState() (*FSState, error) {
 		if os.IsNotExist(err) || info.Size() == 0 {
 			logger.Info("No valid state file, creating new state")
 			state := &FSState{
-				VirtualPaths: make(map[string]string),
+				Mappings: make(map[string]FileMapping),
 				Directories: map[string]bool{
 					"/": true,
 				},
@@ -127,7 +127,10 @@ func (sm *Manager) LoadState() (*FSState, error) {
 		return nil, fmt.Errorf("failed to parse state file: %w", err)
 	}
 
-	// Ensure root directory exists
+	// Ensure required fields are initialized
+	if state.Mappings == nil {
+		state.Mappings = make(map[string]FileMapping)
+	}
 	if state.Directories == nil {
 		state.Directories = make(map[string]bool)
 	}

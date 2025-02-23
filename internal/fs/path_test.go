@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"vmapfs/internal/state"
 )
 
 func TestSourcePath(t *testing.T) {
@@ -93,14 +94,12 @@ func TestVirtualPath(t *testing.T) {
 }
 
 func TestPathMapper(t *testing.T) {
-	// Create temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "pathmap-test-*")
+	tempDir, err := os.MkdirTemp("", "pathmap-test-")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create test files
 	testFiles := []string{
 		"file1.txt",
 		"dir1/file2.txt",
@@ -118,14 +117,13 @@ func TestPathMapper(t *testing.T) {
 	}
 
 	// Initialize PathMapper with some initial mappings
-	initialMappings := map[string]string{
-		"/mapped/file1.txt":      "file1.txt",
-		"/mapped/dir1/file2.txt": "dir1/file2.txt",
+	initialMappings := map[string]state.FileMapping{
+		"file1.txt":      {VirtualPath: "/mapped/file1.txt"},
+		"dir1/file2.txt": {VirtualPath: "/mapped/dir1/file2.txt"},
 	}
 
 	pm := NewPathMapper(tempDir, initialMappings)
 
-	// Test GetSourcePath
 	t.Run("GetSourcePath", func(t *testing.T) {
 		vp := NewVirtualPath("/mapped/file1.txt")
 		sp, exists := pm.GetSourcePath(vp)
@@ -137,7 +135,6 @@ func TestPathMapper(t *testing.T) {
 		}
 	})
 
-	// Test GetVirtualPath
 	t.Run("GetVirtualPath", func(t *testing.T) {
 		sp := NewSourcePath("file1.txt")
 		vp, exists := pm.GetVirtualPath(sp)
@@ -149,13 +146,11 @@ func TestPathMapper(t *testing.T) {
 		}
 	})
 
-	// Test AddMapping
 	t.Run("AddMapping", func(t *testing.T) {
 		vp := NewVirtualPath("/new/path.txt")
 		sp := NewSourcePath("dir1/dir2/file3.txt")
 		pm.AddMapping(vp, sp)
 
-		// Verify mapping was added
 		gotSP, exists := pm.GetSourcePath(vp)
 		if !exists {
 			t.Error("Expected new mapping to exist")
@@ -165,23 +160,19 @@ func TestPathMapper(t *testing.T) {
 		}
 	})
 
-	// Test RemoveMapping
 	t.Run("RemoveMapping", func(t *testing.T) {
 		vp := NewVirtualPath("/mapped/file1.txt")
 		pm.RemoveMapping(vp)
 
-		// Verify mapping was removed
 		_, exists := pm.GetSourcePath(vp)
 		if exists {
 			t.Error("Expected mapping to be removed")
 		}
 	})
 
-	// Test UnmappedSourcePaths
 	t.Run("UnmappedSourcePaths", func(t *testing.T) {
 		unmapped := pm.UnmappedSourcePaths()
 
-		// After our previous operations, file1.txt should be unmapped
 		foundFile1 := false
 		for _, sp := range unmapped {
 			if sp.String() == "file1.txt" {

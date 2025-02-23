@@ -34,11 +34,11 @@ type VMapFS struct {
 }
 
 // NewVMapFS creates a new virtual filesystem instance.
+// NewVMapFS creates a new virtual filesystem instance.
 func NewVMapFS(sourceDir string, state *state.FSState, stateManager *state.Manager) (*VMapFS, error) {
 	vfsLogger.Info("Creating new virtual filesystem")
 	vfsLogger.Debug("Source directory: %s", sourceDir)
 
-	// Get UID/GID from environment if set
 	uid := safeIntToUint32(os.Getuid())
 	gid := safeIntToUint32(os.Getgid())
 
@@ -55,10 +55,9 @@ func NewVMapFS(sourceDir string, state *state.FSState, stateManager *state.Manag
 		}
 	}
 
-	// Initialize path mapper with existing mappings
-	vfsLogger.Debug("Initializing path mapper with %d existing mappings",
-		len(state.VirtualPaths))
-	pathMapper := NewPathMapper(sourceDir, state.VirtualPaths)
+	// Initialize path mapper with mappings from state
+	vfsLogger.Debug("Initializing path mapper with %d mappings", len(state.Mappings))
+	pathMapper := NewPathMapper(sourceDir, state.Mappings)
 
 	vfs := &VMapFS{
 		sourceDir:    sourceDir,

@@ -169,7 +169,6 @@ func (d *UnsortedDir) Rename(_ context.Context, req *fuse.RenameRequest, newDir 
 
 	targetDir, ok := newDir.(*Dir)
 	if !ok {
-		// If target is also an UnsortedDir, deny the operation
 		if _, isUnsorted := newDir.(*UnsortedDir); isUnsorted {
 			unsortedLogger.Warn("Cannot move within _UNSORTED")
 			return syscall.EPERM
@@ -178,21 +177,18 @@ func (d *UnsortedDir) Rename(_ context.Context, req *fuse.RenameRequest, newDir 
 		return syscall.EINVAL
 	}
 
-	// Construct the source path
 	sourcePath := filepath.Join(d.path.String(), req.OldName)
 	sp := NewSourcePath(sourcePath)
 	newPath := NewVirtualPath(filepath.Join(targetDir.path.String(), req.NewName))
 
 	unsortedLogger.Info("Moving %q -> %q", sp.String(), newPath.String())
 
-	// Verify source exists
 	fullSourcePath := sp.FullPath(d.fs.sourceDir)
 	if _, err := os.Stat(fullSourcePath); err != nil {
 		unsortedLogger.Error("Source not found: %v", err)
 		return err
 	}
 
-	// Create mapping
 	d.fs.mu.Lock()
 	d.fs.pathMapper.AddMapping(newPath, sp)
 	err := d.fs.stateManager.SaveState(d.fs.state)

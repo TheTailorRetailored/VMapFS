@@ -18,12 +18,10 @@ var (
 )
 
 // File represents a mapped file in the virtual filesystem.
-// It provides access to an underlying file in the source filesystem
-// through the virtual filesystem interface.
 type File struct {
 	fs         *VMapFS
-	path       *VirtualPath // Virtual path of the file
-	sourcePath *SourcePath  // Actual path in source filesystem
+	path       *VirtualPath
+	sourcePath *SourcePath
 	mu         sync.RWMutex
 }
 
@@ -89,6 +87,109 @@ func (f *File) Open(_ context.Context, req *fuse.OpenRequest, resp *fuse.OpenRes
 		file: file,
 		path: f.path.String(),
 	}, nil
+}
+
+// Getxattr implements the NodeGetxattrer interface, retrieving an extended attribute.
+func (f *File) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	fileLogger.Debug("Getting xattr %q for file %q (source: %q)", req.Name, f.path.String(), f.sourcePath.String())
+	f.fs.mu.RLock()
+	defer f.fs.mu.RUnlock()
+
+	attrs, exists := f.fs.pathMapper.GetXattrs(f.sourcePath)
+	if !exists || attrs == nil {
+		fileLogger.Trace("No xattrs found for source %q", f.sourcePath.String())
+		return fuse.ErrNoXattr
+	}
+
+	value, exists := attrs[req.Name]
+	if !exists {
+		fileLogger.Trace("Xattr %q not found for source %q", req.Name, f.sourcePath.String())
+		return fuse.ErrNoXattr
+	}
+
+	resp.Xattr = value
+	fileLogger.Trace("Retrieved xattr %q: %d bytes", req.Name, len(value))
+	return nil
+}
+
+// Setxattr implements the NodeSetxattrer interface, setting an extended attribute.
+func (f *File) Setxattr(ctx context.Context, req *fuse.SetxattrRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	fileLogger.Debug("Setting xattr %q for file %q (source: %q, size: %d bytes)", req.Name, f.path.String(), f.sourcePath.String(), len(req.Xattr))
+	f.fs.mu.Lock()
+	defer f.fs.mu.Unlock()
+
+	// Store the xattr value (copy to avoid referencing req.Xattr directly)
+	value := make([]byte, len(req.Xattr))
+	copy(value, req.Xattr)
+	f.fs.pathMapper.SetXattr(f.sourcePath, req.Name, value)
+
+	// Save the updated state
+	if err := f.fs.stateManager.SaveState(f.fs.state); err != nil {
+		fileLogger.Error("Failed to save state after setting xattr: %v", err)
+		return err
+	}
+
+	fileLogger.Trace("Xattr %q set successfully", req.Name)
+	return nil
+}
+
+// Listxattr implements the NodeListxattrer interface, listing all extended attributes.
+func (f *File) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	fileLogger.Debug("Listing xattrs for file %q (source: %q)", f.path.String(), f.sourcePath.String())
+	f.fs.mu.RLock()
+	defer f.fs.mu.RUnlock()
+
+	attrs, exists := f.fs.pathMapper.ListXattrs(f.sourcePath)
+	if !exists || len(attrs) == 0 {
+		fileLogger.Trace("No xattrs to list for source %q", f.sourcePath.String())
+		return nil
+	}
+
+	for _, name := range attrs {
+		resp.Append(name)
+	}
+
+	fileLogger.Trace("Listed %d xattrs", len(attrs))
+	return nil
+}
+
+// Removexattr implements the NodeRemovexattrer interface, removing an extended attribute.
+func (f *File) Removexattr(ctx context.Context, req *fuse.RemovexattrRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	fileLogger.Debug("Removing xattr %q for file %q (source: %q)", req.Name, f.path.String(), f.sourcePath.String())
+	f.fs.mu.Lock()
+	defer f.fs.mu.Unlock()
+
+	attrs, exists := f.fs.pathMapper.GetXattrs(f.sourcePath)
+	if !exists || attrs == nil {
+		fileLogger.Trace("No xattrs found to remove for source %q", f.sourcePath.String())
+		return fuse.ErrNoXattr
+	}
+
+	if _, exists := attrs[req.Name]; !exists {
+		fileLogger.Trace("Xattr %q not found for source %q", req.Name, f.sourcePath.String())
+		return fuse.ErrNoXattr
+	}
+
+	f.fs.pathMapper.RemoveXattr(f.sourcePath, req.Name)
+	if err := f.fs.stateManager.SaveState(f.fs.state); err != nil {
+		fileLogger.Error("Failed to save state after removing xattr: %v", err)
+		return err
+	}
+
+	fileLogger.Trace("Xattr %q removed successfully", req.Name)
+	return nil
 }
 
 // FileHandle represents an open file handle.
