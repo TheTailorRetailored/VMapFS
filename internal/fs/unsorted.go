@@ -2,7 +2,6 @@ package fs
 
 import (
 	"context"
-	"log"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -62,7 +61,7 @@ func (d *UnsortedDir) Attr(_ context.Context, a *fuse.Attr) error {
 
 func (d *UnsortedDir) Lookup(_ context.Context, name string) (fusefs.Node, error) {
 	unsortedLogger.Debug("Looking up %q in _UNSORTED path %q", name, d.path.String())
-	childPath := NewSourcePath(d.path.String() + "/" + name)
+	childPath := NewSourcePath(filepath.Join(d.path.String(), name))
 	fullPath := childPath.FullPath(d.fs.sourceDir)
 
 	info, err := os.Stat(fullPath)
@@ -75,14 +74,13 @@ func (d *UnsortedDir) Lookup(_ context.Context, name string) (fusefs.Node, error
 		return nil, err
 	}
 
-	// Check if path is already mapped
+	// Check if path is mapped (only fully mapped with non-empty virtual_path counts)
 	if d.fs.pathMapper.IsPathMapped(childPath) {
 		unsortedLogger.Debug("Path is already mapped: %q", childPath.String())
 		return nil, syscall.ENOENT
 	}
 
 	if info.IsDir() {
-		// Check if directory is empty of unmapped files
 		if d.isDirectoryEmpty(childPath) {
 			unsortedLogger.Debug("Directory is empty of unmapped files: %q", childPath.String())
 			return nil, syscall.ENOENT
@@ -110,7 +108,7 @@ func (d *UnsortedDir) ReadDirAll(_ context.Context) ([]fuse.Dirent, error) {
 	for _, entry := range entries {
 		childPath := NewSourcePath(filepath.Join(d.path.String(), entry.Name()))
 
-		// Skip if path is mapped
+		// Skip if fully mapped (non-empty virtual_path)
 		if d.fs.pathMapper.IsPathMapped(childPath) {
 			continue
 		}
@@ -123,7 +121,6 @@ func (d *UnsortedDir) ReadDirAll(_ context.Context) ([]fuse.Dirent, error) {
 		var entryType fuse.DirentType
 		if info.IsDir() {
 			entryType = fuse.DT_Dir
-			// Check if directory has any unmapped files
 			isEmpty := true
 			err := filepath.Walk(filepath.Join(d.path.FullPath(d.fs.sourceDir), entry.Name()), func(path string, info os.FileInfo, err error) error {
 				if err != nil {
@@ -140,13 +137,10 @@ func (d *UnsortedDir) ReadDirAll(_ context.Context) ([]fuse.Dirent, error) {
 				return nil
 			})
 			if err != nil {
-				log.Printf("Error walking directory: %v", err)
+				unsortedLogger.Error("Error walking directory: %v", err)
 				return nil, err
 			}
-
-			if !isEmpty {
-				entryType = fuse.DT_Dir
-			} else {
+			if isEmpty {
 				continue
 			}
 		} else {

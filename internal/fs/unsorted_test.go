@@ -22,6 +22,7 @@ func TestUnsortedDirectory(t *testing.T) {
 		"unsorted1.txt",
 		"unsorted2.txt",
 		"nested/unsorted3.txt",
+		"partial.txt",
 	}
 
 	for _, tf := range testFiles {
@@ -34,24 +35,23 @@ func TestUnsortedDirectory(t *testing.T) {
 		}
 	}
 
+	// Simulate partial mapping for "partial.txt" (xattrs but no virtual_path)
+	vfs.pathMapper.SetXattr(NewSourcePath("partial.txt"), "test.partial", []byte("partial value"))
+
 	// Test _UNSORTED directory listing
 	t.Run("UnsortedListing", func(t *testing.T) {
 		root, _ := vfs.Root()
-
-		// Look up _UNSORTED directory
 		unsortedNode, err := root.(*Dir).Lookup(ctx, "_UNSORTED")
 		if err != nil {
 			t.Fatalf("Failed to lookup _UNSORTED: %v", err)
 		}
 
-		// Read root _UNSORTED contents
 		unsorted := unsortedNode.(*UnsortedDir)
 		entries, err := unsorted.ReadDirAll(ctx)
 		if err != nil {
 			t.Fatalf("Failed to read _UNSORTED directory: %v", err)
 		}
 
-		// Should see root files and the nested directory
 		foundFiles := make(map[string]bool)
 		foundDirs := make(map[string]bool)
 		for _, entry := range entries {
@@ -62,20 +62,19 @@ func TestUnsortedDirectory(t *testing.T) {
 			}
 		}
 
-		// Check for root files
 		if !foundFiles["unsorted1.txt"] {
 			t.Error("Expected to find unsorted1.txt in _UNSORTED root")
 		}
 		if !foundFiles["unsorted2.txt"] {
 			t.Error("Expected to find unsorted2.txt in _UNSORTED root")
 		}
-
-		// Check for nested directory
 		if !foundDirs["nested"] {
 			t.Error("Expected to find 'nested' directory in _UNSORTED root")
 		}
+		if !foundFiles["partial.txt"] {
+			t.Error("Expected to find partial.txt (no virtual_path) in _UNSORTED root")
+		}
 
-		// Now check nested directory contents
 		if foundDirs["nested"] {
 			nestedNode, err := unsorted.Lookup(ctx, "nested")
 			if err != nil {

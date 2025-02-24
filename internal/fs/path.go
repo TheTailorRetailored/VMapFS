@@ -117,9 +117,11 @@ func NewPathMapper(sourceRoot string, mappings map[string]state.FileMapping) *Pa
 
 // IsPathMapped returns true if the source path has a virtual mapping
 func (pm *PathMapper) IsPathMapped(sp *SourcePath) bool {
-	_, exists := pm.mappings[sp.String()]
-	pm.logger.Trace("Checking if path is mapped: %q (mapped=%v)", sp.String(), exists)
-	return exists
+	mapping, exists := pm.mappings[sp.String()]
+	// Consider it mapped only if it exists and has a non-empty virtual path
+	mapped := exists && mapping.VirtualPath != ""
+	pm.logger.Trace("Checking if path is mapped: %q (exists=%v, virtual_path=%q, mapped=%v)", sp.String(), exists, mapping.VirtualPath, mapped)
+	return mapped
 }
 
 // GetVirtualPath returns the virtual path for a source path, if one exists
