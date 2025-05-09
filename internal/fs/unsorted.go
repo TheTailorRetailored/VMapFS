@@ -175,17 +175,24 @@ func (d *UnsortedDir) Rename(_ context.Context, req *fuse.RenameRequest, newDir 
 	sp := NewSourcePath(sourcePath)
 	newPath := NewVirtualPath(filepath.Join(targetDir.path.String(), req.NewName))
 
-	unsortedLogger.Info("Moving %q -> %q", sp.String(), newPath.String())
-
 	fullSourcePath := sp.FullPath(d.fs.sourceDir)
-	if _, err := os.Stat(fullSourcePath); err != nil {
+	info, err := os.Stat(fullSourcePath)
+	if err != nil {
 		unsortedLogger.Error("Source not found: %v", err)
 		return err
 	}
 
+	// 🚫 Prevent mapping directories
+	if info.IsDir() {
+		unsortedLogger.Warn("Attempted to map a directory from _UNSORTED: %q", fullSourcePath)
+		return syscall.EISDIR
+	}
+
+	unsortedLogger.Info("Moving file %q -> %q", sp.String(), newPath.String())
+
 	d.fs.mu.Lock()
 	d.fs.pathMapper.AddMapping(newPath, sp)
-	err := d.fs.stateManager.SaveState(d.fs.state)
+	err = d.fs.stateManager.SaveState(d.fs.state)
 	d.fs.mu.Unlock()
 
 	if err != nil {

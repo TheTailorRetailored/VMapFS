@@ -247,13 +247,20 @@ func (d *Dir) Rename(_ context.Context, req *fuse.RenameRequest, newDir fusefs.N
 			dirLogger.Warn("Source path not found: %q", oldPath.String())
 			return syscall.ENOENT
 		}
+
+		// 🚫 Prevent renaming a directory-mapped path
+		fullSource := sourcePath.FullPath(d.fs.sourceDir)
+		if info, err := os.Stat(fullSource); err == nil && info.IsDir() {
+			dirLogger.Warn("Attempted to rename mapped directory: %q", fullSource)
+			return syscall.EISDIR
+		}
+
 		dirLogger.Debug("Moving file from %q to %q", oldPath.String(), newPath.String())
 		d.fs.pathMapper.RemoveMapping(oldPath)
 		d.fs.pathMapper.AddMapping(newPath, sourcePath)
 	}
 
-	err := d.fs.stateManager.SaveState(d.fs.state)
-	if err != nil {
+	if err := d.fs.stateManager.SaveState(d.fs.state); err != nil {
 		dirLogger.Error("Failed to save state: %v", err)
 		return err
 	}

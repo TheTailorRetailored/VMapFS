@@ -148,6 +148,17 @@ func (pm *PathMapper) GetSourcePath(vp *VirtualPath) (*SourcePath, bool) {
 
 // AddMapping creates a new virtual->source path mapping
 func (pm *PathMapper) AddMapping(vp *VirtualPath, sp *SourcePath) {
+	fullPath := sp.FullPath(pm.sourceRoot)
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		pm.logger.Warn("Cannot stat source path %q: %v", fullPath, err)
+		return
+	}
+	if info.IsDir() {
+		pm.logger.Warn("Rejecting directory mapping: %q", sp.String())
+		return
+	}
+
 	pm.logger.Debug("Adding mapping: %q -> %q", vp.String(), sp.String())
 	mapping, exists := pm.mappings[sp.String()]
 	if !exists {
