@@ -170,25 +170,43 @@ func (d *Dir) Remove(_ context.Context, req *fuse.RemoveRequest) error {
 			return syscall.ENOENT
 		}
 
+		dirLogger.Debug("Bulk unmapping children under: %q", childPath.String())
 		prefix := childPath.String() + "/"
+
+		// Collect all virtual paths that are children of the directory being deleted
+		toUnmap := []*VirtualPath{}
 		for _, mapping := range d.fs.pathMapper.mappings {
 			if strings.HasPrefix(mapping.VirtualPath, prefix) {
-				d.fs.mu.RUnlock()
-				dirLogger.Warn("Directory not empty: %q", childPath.String())
-				return syscall.ENOTEMPTY
+				toUnmap = append(toUnmap, NewVirtualPath(mapping.VirtualPath))
 			}
 		}
+
+		d.fs.mu.RUnlock()
+		d.fs.mu.Lock()
+
+		for _, vp := range toUnmap {
+			dirLogger.Debug("Unmapping: %q", vp.String())
+			d.fs.pathMapper.RemoveMapping(vp)
+		}
+
+		delete(d.fs.state.Directories, childPath.String())
+		err := d.fs.stateManager.SaveState(d.fs.state)
+		d.fs.mu.Unlock()
+
+		if err != nil {
+			dirLogger.Error("Failed to save state: %v", err)
+			return err
+		}
+
+		dirLogger.Info("Directory and all child mappings removed: %q", childPath.String())
+		return nil
 	}
 	d.fs.mu.RUnlock()
 
+	// If it's not a directory, just remove the file mapping
 	d.fs.mu.Lock()
-	if req.Dir {
-		dirLogger.Debug("Removing directory: %q", childPath.String())
-		delete(d.fs.state.Directories, childPath.String())
-	} else {
-		dirLogger.Debug("Removing file mapping: %q", childPath.String())
-		d.fs.pathMapper.RemoveMapping(childPath)
-	}
+	dirLogger.Debug("Removing file mapping: %q", childPath.String())
+	d.fs.pathMapper.RemoveMapping(childPath)
 
 	err := d.fs.stateManager.SaveState(d.fs.state)
 	d.fs.mu.Unlock()

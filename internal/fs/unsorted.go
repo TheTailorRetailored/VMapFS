@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"vmapfs/internal/logging"
@@ -173,34 +174,81 @@ func (d *UnsortedDir) Rename(_ context.Context, req *fuse.RenameRequest, newDir 
 
 	sourcePath := filepath.Join(d.path.String(), req.OldName)
 	sp := NewSourcePath(sourcePath)
-	newPath := NewVirtualPath(filepath.Join(targetDir.path.String(), req.NewName))
-
+	newBasePath := filepath.Join(targetDir.path.String(), req.NewName)
 	fullSourcePath := sp.FullPath(d.fs.sourceDir)
+
 	info, err := os.Stat(fullSourcePath)
 	if err != nil {
 		unsortedLogger.Error("Source not found: %v", err)
 		return err
 	}
 
-	// 🚫 Prevent mapping directories
-	if info.IsDir() {
-		unsortedLogger.Warn("Attempted to map a directory from _UNSORTED: %q", fullSourcePath)
-		return syscall.EISDIR
+	// If it's a regular file, map directly
+	if !info.IsDir() {
+		unsortedLogger.Info("Moving file %q -> %q", sp.String(), newBasePath)
+		d.fs.mu.Lock()
+		d.fs.pathMapper.AddMapping(NewVirtualPath(newBasePath), sp)
+		err := d.fs.stateManager.SaveState(d.fs.state)
+		d.fs.mu.Unlock()
+		if err != nil {
+			unsortedLogger.Error("Failed to save state: %v", err)
+			return err
+		}
+		unsortedLogger.Info("File moved successfully")
+		return nil
 	}
 
-	unsortedLogger.Info("Moving file %q -> %q", sp.String(), newPath.String())
+	// If it's a directory, recursively map all child files only
+	unsortedLogger.Info("Moving directory %q -> %q (mapping children only)", sp.String(), newBasePath)
 
-	d.fs.mu.Lock()
-	d.fs.pathMapper.AddMapping(newPath, sp)
-	err = d.fs.stateManager.SaveState(d.fs.state)
-	d.fs.mu.Unlock()
+	var filesToMap []struct {
+		source *SourcePath
+		target *VirtualPath
+	}
 
+	err = filepath.Walk(fullSourcePath, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(d.fs.sourceDir, path)
+		if relErr != nil {
+			return relErr
+		}
+		source := NewSourcePath(rel)
+		suffix := strings.TrimPrefix(path, fullSourcePath)
+		suffix = strings.TrimPrefix(suffix, "/")
+		target := NewVirtualPath(filepath.Join(newBasePath, suffix))
+		filesToMap = append(filesToMap, struct {
+			source *SourcePath
+			target *VirtualPath
+		}{source, target})
+		return nil
+	})
 	if err != nil {
-		unsortedLogger.Error("Failed to save state: %v", err)
+		unsortedLogger.Error("Failed to walk source directory: %v", err)
 		return err
 	}
 
-	unsortedLogger.Info("Successfully moved file to virtual path")
+	// Create the parent virtual directory path
+	d.fs.mu.Lock()
+	d.fs.state.Directories[newBasePath] = true
+
+	for _, pair := range filesToMap {
+		unsortedLogger.Debug("Mapping file %q -> %q", pair.source.String(), pair.target.String())
+		d.fs.pathMapper.AddMapping(pair.target, pair.source)
+	}
+
+	err = d.fs.stateManager.SaveState(d.fs.state)
+	d.fs.mu.Unlock()
+	if err != nil {
+		unsortedLogger.Error("Failed to save mapped children: %v", err)
+		return err
+	}
+
+	unsortedLogger.Info("Directory contents mapped successfully")
 	return nil
 }
 
