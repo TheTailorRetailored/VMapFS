@@ -188,11 +188,11 @@ func (d *UnsortedDir) Rename(_ context.Context, req *fuse.RenameRequest, newDir 
 		unsortedLogger.Info("Moving file %q -> %q", sp.String(), newBasePath)
 		d.fs.mu.Lock()
 		d.fs.pathMapper.AddMapping(NewVirtualPath(newBasePath), sp)
-		err := d.fs.stateManager.SaveState(d.fs.state)
+		saveErr := d.fs.stateManager.SaveState(d.fs.state)
 		d.fs.mu.Unlock()
-		if err != nil {
-			unsortedLogger.Error("Failed to save state: %v", err)
-			return err
+		if saveErr != nil {
+			unsortedLogger.Error("Failed to save state: %v", saveErr)
+			return saveErr
 		}
 		unsortedLogger.Info("File moved successfully")
 		return nil
@@ -325,7 +325,7 @@ func (f *UnsortedFile) Open(_ context.Context, req *fuse.OpenRequest, resp *fuse
 }
 
 // Getxattr retrieves an extended attribute.
-func (f *UnsortedFile) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+func (f *UnsortedFile) Getxattr(_ context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
 	unsortedLogger.Debug("Getting xattr %q for unsorted file %q", req.Name, f.path.String())
 	f.fs.mu.RLock()
 	defer f.fs.mu.RUnlock()
@@ -348,7 +348,7 @@ func (f *UnsortedFile) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, 
 }
 
 // Setxattr sets an extended attribute.
-func (f *UnsortedFile) Setxattr(ctx context.Context, req *fuse.SetxattrRequest) error {
+func (f *UnsortedFile) Setxattr(_ context.Context, req *fuse.SetxattrRequest) error {
 	unsortedLogger.Debug("Setting xattr %q for unsorted file %q (size: %d bytes)", req.Name, f.path.String(), len(req.Xattr))
 	f.fs.mu.Lock()
 	defer f.fs.mu.Unlock()
@@ -367,7 +367,7 @@ func (f *UnsortedFile) Setxattr(ctx context.Context, req *fuse.SetxattrRequest) 
 }
 
 // Listxattr lists all extended attributes.
-func (f *UnsortedFile) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+func (f *UnsortedFile) Listxattr(_ context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
 	unsortedLogger.Debug("Listing xattrs for unsorted file %q", f.path.String())
 	f.fs.mu.RLock()
 	defer f.fs.mu.RUnlock()
