@@ -1,12 +1,17 @@
 # VMapFS
 
-VMapFS is an experimental read-only-source FUSE filesystem written in Go. It presents a configurable virtual directory tree without renaming, moving, or duplicating the underlying files.
+VMapFS is a small Go/FUSE experiment for rearranging a directory tree without
+touching the original files. You point it at a read-only source directory and
+give it a JSON state file; it mounts the alternate layout you described.
 
-The source tree remains untouched. Virtual directories, renamed paths, and extended attributes are recorded in a small JSON state file.
+Virtual directories, renamed paths and extended attributes live in the state
+file. The source tree stays where it is.
 
-## Why it exists
+## The idea
 
-Real datasets often arrive in a layout chosen by an instrument, vendor, archive, or legacy application. Reorganising the source can break checksums, synchronisation, provenance, or downstream tooling. VMapFS adds an alternative view while preserving the original bytes and paths.
+I wanted to reorganise awkward source trees without breaking checksums, sync
+jobs or anything else that expected the old paths. A FUSE view turned out to be
+a useful way to do that.
 
 Useful examples include:
 
@@ -17,7 +22,9 @@ Useful examples include:
 
 ## Status
 
-VMapFS is an experimental project, not a production-ready filesystem. It has automated unit tests and CI, but has been exercised in a limited set of Linux/FUSE environments. Use it on non-critical data and keep state-file backups.
+This is still experimental, not a production filesystem. It has unit tests and
+Linux CI, but I have only used it in a small number of FUSE environments. Try
+it on non-critical data first and keep a copy of the state file.
 
 ## Features
 
