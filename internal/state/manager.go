@@ -198,6 +198,7 @@ func (sm *Manager) createBackup() error {
 	backupPath := filepath.Join(sm.backupDir, fmt.Sprintf("state-%s.json", timestamp))
 
 	logger.Debug("Creating backup: %s", backupPath)
+	// #nosec G703 -- backupPath is derived from the configured internal backup directory and a fixed timestamp format.
 	if err := os.WriteFile(backupPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write backup: %w", err)
 	}

@@ -16,6 +16,8 @@ var (
 	dirLogger = logging.GetLogger().WithPrefix("dir")
 )
 
+const unsortedDirName = "_UNSORTED"
+
 // Dir represents a directory in the virtual filesystem.
 // It can be either the root directory, a virtual directory created by the user,
 // or a mapped directory from the source filesystem.
@@ -51,7 +53,7 @@ func (d *Dir) Lookup(_ context.Context, name string) (fusefs.Node, error) {
 	dirLogger.Debug("Looking up %q in directory %q", name, d.path.String())
 	childPath := NewVirtualPath(d.path.String() + "/" + name)
 
-	if d.path.IsRoot() && name == "_UNSORTED" {
+	if d.path.IsRoot() && name == unsortedDirName {
 		dirLogger.Debug("Returning UnsortedDir for _UNSORTED")
 		return NewUnsortedDir(d.fs, NewSourcePath("")), nil
 	}
@@ -85,7 +87,7 @@ func (d *Dir) ReadDirAll(_ context.Context) ([]fuse.Dirent, error) {
 	if d.path.IsRoot() {
 		dirLogger.Trace("Adding _UNSORTED to root directory listing")
 		entries = append(entries, fuse.Dirent{
-			Name: "_UNSORTED",
+			Name: unsortedDirName,
 			Type: fuse.DT_Dir,
 		})
 	}

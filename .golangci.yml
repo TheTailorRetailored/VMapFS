@@ -1,34 +1,42 @@
+version: "2"
 linters:
   enable:
-    - gofmt
-    - govet
-    - gosimple
-    - goconst
-    - goimports
-    - misspell
-    - revive
-    - ineffassign
-    - gosec
-    - staticcheck
-    - prealloc
     - bodyclose
-    - errcheck
-    # shadow was removed, using govet's shadow checking instead
-  
-linters-settings:
-  govet:
-    check-shadowing: true
-  gosec:
-    excludes:
-      - G304  # Ignore file inclusion via variable (needed for FUSE)
-
-issues:
-  exclude-dirs:
-    - vendor
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-
-run:
-  timeout: 5m
+    - goconst
+    - gosec
+    - misspell
+    - prealloc
+    - revive
+  settings:
+    gosec:
+      excludes:
+        - G304
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gosec
+          - goconst
+          - staticcheck
+        path: _test\.go
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$

@@ -50,7 +50,7 @@ func (d *UnsortedDir) Attr(_ context.Context, a *fuse.Attr) error {
 	}
 
 	a.Mode = info.Mode()
-	a.Size = uint64(info.Size())
+	a.Size = safeInt64ToUint64(info.Size())
 	a.Mtime = info.ModTime()
 	a.Atime = info.ModTime()
 	a.Ctime = info.ModTime()
@@ -294,14 +294,14 @@ func (f *UnsortedFile) Attr(_ context.Context, a *fuse.Attr) error {
 	}
 
 	a.Mode = info.Mode()
-	a.Size = uint64(info.Size())
+	a.Size = safeInt64ToUint64(info.Size())
 	a.Mtime = info.ModTime()
 	a.Atime = info.ModTime()
 	a.Ctime = info.ModTime()
 	a.Uid = f.fs.uid
 	a.Gid = f.fs.gid
 	a.BlockSize = 4096
-	a.Blocks = (uint64(info.Size()) + 511) / 512
+	a.Blocks = (safeInt64ToUint64(info.Size()) + 511) / 512
 
 	return nil
 }
@@ -367,7 +367,7 @@ func (f *UnsortedFile) Setxattr(_ context.Context, req *fuse.SetxattrRequest) er
 }
 
 // Listxattr lists all extended attributes.
-func (f *UnsortedFile) Listxattr(_ context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+func (f *UnsortedFile) Listxattr(_ context.Context, _ *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
 	unsortedLogger.Debug("Listing xattrs for unsorted file %q", f.path.String())
 	f.fs.mu.RLock()
 	defer f.fs.mu.RUnlock()
@@ -387,7 +387,7 @@ func (f *UnsortedFile) Listxattr(_ context.Context, req *fuse.ListxattrRequest, 
 }
 
 // Removexattr removes an extended attribute.
-func (f *UnsortedFile) Removexattr(ctx context.Context, req *fuse.RemovexattrRequest) error {
+func (f *UnsortedFile) Removexattr(_ context.Context, req *fuse.RemovexattrRequest) error {
 	unsortedLogger.Debug("Removing xattr %q for unsorted file %q", req.Name, f.path.String())
 	f.fs.mu.Lock()
 	defer f.fs.mu.Unlock()

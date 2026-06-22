@@ -36,8 +36,8 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.55.2
-          args: --timeout=5m --out-format=colored-line-number
+          version: v2.12.2
+          args: --timeout=5m
           only-new-issues: false
 
   release:

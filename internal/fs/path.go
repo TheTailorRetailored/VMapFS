@@ -236,7 +236,7 @@ func (pm *PathMapper) UnmappedSourcePaths() []*SourcePath {
 	pm.logger.Debug("Finding unmapped source paths")
 
 	var unmapped []*SourcePath
-	if err := filepath.Walk(pm.sourceRoot, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(pm.sourceRoot, func(path string, _ os.FileInfo, err error) error {
 		if err != nil {
 			pm.logger.Error("Error walking path %q: %v", path, err)
 			return err

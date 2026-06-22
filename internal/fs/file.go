@@ -90,7 +90,7 @@ func (f *File) Open(_ context.Context, req *fuse.OpenRequest, resp *fuse.OpenRes
 }
 
 // Getxattr implements the NodeGetxattrer interface, retrieving an extended attribute.
-func (f *File) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+func (f *File) Getxattr(_ context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -116,7 +116,7 @@ func (f *File) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fu
 }
 
 // Setxattr implements the NodeSetxattrer interface, setting an extended attribute.
-func (f *File) Setxattr(ctx context.Context, req *fuse.SetxattrRequest) error {
+func (f *File) Setxattr(_ context.Context, req *fuse.SetxattrRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -140,7 +140,7 @@ func (f *File) Setxattr(ctx context.Context, req *fuse.SetxattrRequest) error {
 }
 
 // Listxattr implements the NodeListxattrer interface, listing all extended attributes.
-func (f *File) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+func (f *File) Listxattr(_ context.Context, _ *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
@@ -163,7 +163,7 @@ func (f *File) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *
 }
 
 // Removexattr implements the NodeRemovexattrer interface, removing an extended attribute.
-func (f *File) Removexattr(ctx context.Context, req *fuse.RemovexattrRequest) error {
+func (f *File) Removexattr(_ context.Context, req *fuse.RemovexattrRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
