@@ -1,208 +1,140 @@
 # VMapFS
 
-A virtual FUSE filesystem that creates a customizable view of files without modifying the source. VMapFS lets you reorganize, rename, and restructure files while keeping the original data untouched.
+VMapFS is an experimental read-only-source FUSE filesystem written in Go. It presents a configurable virtual directory tree without renaming, moving, or duplicating the underlying files.
+
+The source tree remains untouched. Virtual directories, renamed paths, and extended attributes are recorded in a small JSON state file.
+
+## Why it exists
+
+Real datasets often arrive in a layout chosen by an instrument, vendor, archive, or legacy application. Reorganising the source can break checksums, synchronisation, provenance, or downstream tooling. VMapFS adds an alternative view while preserving the original bytes and paths.
+
+Useful examples include:
+
+- presenting research data by project while retaining an instrument-native source layout;
+- giving legacy archives a clearer directory structure without a migration;
+- creating separate read-only views of the same source using different state profiles;
+- exposing unmapped files through `_UNSORTED` so new arrivals remain visible.
+
+## Status
+
+VMapFS is an experimental project, not a production-ready filesystem. It has automated unit tests and CI, but has been exercised in a limited set of Linux/FUSE environments. Use it on non-critical data and keep state-file backups.
 
 ## Features
 
-- **Virtual Directory Structure**: Create custom hierarchies without altering source files
-- **Automatic File Discovery**: Browse unmapped files through the `_UNSORTED` directory
-- **State Management**: Persistent mappings with automatic state file backups (keeps last 5 versions)
-- **Source Preservation**: Read-only access to source files ensures data integrity
-- **Flexible Integration**: Should work with any mounted filesystem (local, NFS, FUSE)
-- **Direct I/O**: Efficient streaming of source files
-- **Permission Management**: Configurable UID/GID via environment variables
-- **Debug Logging**: Optional detailed logging for troubleshooting
+- immutable source-data access;
+- persistent virtual path mappings and directories;
+- `_UNSORTED` discovery for files without mappings;
+- state backups retaining the five most recent versions;
+- configurable UID/GID and extended-attribute support;
+- direct streaming from source files;
+- debug logging for filesystem operations.
 
-**⚠️ Important Note**: This software is currently in early development and has only been tested in limited environments. It should be considered experimental and not ready for production use. Testing and contributions are welcome!
+## Architecture
 
-## Use Cases
-
-- **Media Servers**: Organize streaming content (e.g., RealDebrid via Zurg) into clean media libraries
-- **Research Data**: Present the same dataset organized by different attributes (e.g., by date, by type, by project) without duplicating files
-- **Cloud Storage**: Create custom views of remote storage without syncing
-- **Data Organization**: Maintain multiple virtual organizations of the same data
-- **Legacy Systems**: Provide modern directory structures over old file layouts
-
-For example, a research dataset could be organized multiple ways:
+```text
+applications
+    |
+FUSE mount (virtual paths)
+    |
+VMapFS path mapper ---- JSON state + backups
+    |
+read-only source tree
 ```
-# By Date
-/2023/Q1/experiment_a.dat
-/2023/Q2/experiment_b.dat
 
-# By Project
-/project_alpha/experiment_a.dat
-/project_beta/experiment_b.dat
-
-# By Type
-/raw_data/experiment_a.dat
-/raw_data/experiment_b.dat
-```
-All pointing to the same source files, allowing different teams to use their preferred organization.
+Each mount uses one state file. To expose the same source in two different organisations, run two mounts with separate state profiles.
 
 ## Requirements
 
-- Linux with FUSE support (`libfuse` or `fuse3`)
-- Go 1.21 or later (for building)
-- Read access to source filesystem
-- Write access to mount point
+- Linux with FUSE support;
+- Go 1.21 or later for source builds;
+- read access to the source directory;
+- write access to the mount point and state-file directory.
 
-### Installing FUSE
+On Debian or Ubuntu:
 
 ```bash
-# Ubuntu/Debian
-sudo apt-get install fuse
-
-# RHEL/CentOS
-sudo yum install fuse
-
-# Arch Linux
-sudo pacman -S fuse2
-
-# macOS
-brew install macfuse
+sudo apt-get install fuse libfuse-dev
 ```
 
-## Installation
-
-### From Source
+## Build and test
 
 ```bash
-git clone https://github.com/yourusername/vmapfs.git
-cd vmapfs
+git clone https://github.com/TheTailorRetailored/VMapFS.git
+cd VMapFS
+make test
 make build
 ```
 
-The binary will be created in `bin/vmapfs`.
-
-### Docker
-
-An example Docker setup combining VMapFS with Jellyfin, Zurg (Real-Debrid), and other services will be provided in a separate repository to demonstrate a complete media server stack.
+The binary is written to `bin/vmapfs`.
 
 ## Usage
 
-### Basic Command
-
 ```bash
-vmapfs -mount /path/to/mountpoint -source /path/to/source -state /path/to/state.json
+mkdir -p /tmp/vmapfs-view
+./bin/vmapfs \
+  -source /path/to/source \
+  -mount /tmp/vmapfs-view \
+  -state /path/to/state.json
 ```
 
-### Environment Variables
+Environment variables:
 
-- `PUID`: User ID for file ownership (default: current user)
-- `PGID`: Group ID for file ownership (default: current group)
-- `FUSE_DEBUG`: Enable detailed FUSE debugging (default: 0)
-- `LOG_LEVEL`: Set logging verbosity (default: INFO)
+- `PUID` and `PGID` control presented ownership;
+- `FUSE_DEBUG=1` enables FUSE diagnostics;
+- `LOG_LEVEL=DEBUG` increases application logging.
 
-### State File
-
-The state file (`state.json`) maintains your virtual filesystem structure:
+The state format maps source-relative paths to virtual paths:
 
 ```json
 {
-  "virtual_paths": {
-    "/movies/Inception (2010).mkv": "raw/inception_1080p.mkv",
-    "/tv/Breaking Bad/S01E01.mkv": "shows/bb_101.mkv"
+  "mappings": {
+    "instrument-a/run-001.csv": {
+      "virtual_path": "/projects/climate/run-001.csv"
+    }
   },
   "directories": {
     "/": true,
-    "/movies": true,
-    "/tv": true,
-    "/tv/Breaking Bad": true
+    "/projects": true,
+    "/projects/climate": true
   },
   "version": 1
 }
 ```
 
-### Directory Structure
+See [`examples/research-data`](examples/research-data/README.md) for two state profiles that present the same synthetic source tree in different ways.
 
-- **/** - Root of virtual filesystem
-- **/_UNSORTED** - Shows unmapped files from source
-- **/your/paths** - Your custom directory structure
+## Virtual operations
 
-### File Operations
+- Browse `_UNSORTED` to find source files that have not been mapped.
+- Create virtual directories through the mounted filesystem.
+- Move or rename files within the virtual view without altering their source paths.
+- Remove a virtual mapping without deleting the source file.
 
-- **Browse**: Navigate `_UNSORTED` to see available files
-- **Organize**: Create directories and move files as needed
-- **Rename**: Rename files or directories without affecting source
-- **Remove**: Delete virtual paths without touching source files
+State changes are persisted with restricted file permissions. Backups are stored beside the state file in `.vmapfs-backups/`.
 
-### Automatic Features
+## Limitations
 
-- State file backups (keeps last 5 versions)
-- Automatic source file discovery in _UNSORTED
-- Virtual directory cleanup when removing mappings
-
-Note: The _UNSORTED directory is planned to be hidden when empty in future versions.
-
-## Integration Examples
-
-### Media Server Setup
-
-```yaml
-# docker-compose.yml example
-services:
-  vmapfs:
-    build: .
-    volumes:
-      - /mnt/source:/source:ro
-      - /mnt/virtual:/virtual
-      - ./state:/state
-    environment:
-      - PUID=1000
-      - PGID=1000
-    devices:
-      - /dev/fuse:/dev/fuse
-    cap_add:
-      - SYS_ADMIN
-    security_opt:
-      - apparmor:unconfined
-```
-
-### Jellyfin/Plex Integration
-
-Point your media server to the VMapFS mount for a clean library structure while keeping source files organized separately.
+- Linux/FUSE is the primary supported environment.
+- A source file has one virtual path per mounted state profile.
+- Concurrent external edits to a state file are unsupported.
+- Compatibility and crash behaviour have not been validated for production workloads.
 
 ## Development
 
-### Building
-
-```bash
-make build  # Build binary
-make test   # Run tests
-make clean  # Clean build artifacts
-```
-
-### Testing
-
 ```bash
 make test
+go test -race ./...
+go vet ./...
 ```
 
-### Debugging
+Pull requests should include tests for changes to path mapping, state persistence, filesystem operations, or extended attributes.
 
-1. Enable debug logging:
-```bash
-export FUSE_DEBUG=1
-export LOG_LEVEL=DEBUG
-```
+## Security
 
-2. Check logs:
-- FUSE operations: kernel logs (`dmesg`)
-- VMapFS logs: stdout/stderr
+VMapFS is designed to preserve source data, but a filesystem bug can still cause unexpected behaviour. Mount only directories you intend to expose, avoid privileged execution, review the generated state, and maintain independent backups of important data.
 
-## Contributing
+Please report security concerns privately to the repository owner rather than attaching sensitive paths or state files to a public issue.
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+## Licence
 
-## License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- FUSE (Filesystem in Userspace)
-- [bazil.org/fuse](https://github.com/bazil/fuse) - Go FUSE library
+MIT. See [`LICENSE`](LICENSE).

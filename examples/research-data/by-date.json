@@ -1,0 +1,20 @@
+{
+  "mappings": {
+    "instrument-a/2026-01-15/run-001.csv": {
+      "virtual_path": "/2026/01/run-001.csv"
+    },
+    "instrument-a/2026-02-03/run-002.csv": {
+      "virtual_path": "/2026/02/run-002.csv"
+    },
+    "instrument-b/2026-01-18/run-003.parquet": {
+      "virtual_path": "/2026/01/run-003.parquet"
+    }
+  },
+  "directories": {
+    "/": true,
+    "/2026": true,
+    "/2026/01": true,
+    "/2026/02": true
+  },
+  "version": 1
+}

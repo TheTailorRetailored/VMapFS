@@ -32,3 +32,7 @@ go.work
 /test_source/
 
 repopack-output.txt
+repomix-output.txt
+
+# Versioned example state profiles
+!examples/**/*.json
